@@ -46,15 +46,24 @@ review `0..5`:
 
 ## Run it
 
-Requires Node 18+.
+Requires Node 18+. Run each command on its own (don't paste the descriptions
+after them — `#` is a comment on macOS/Linux but **not** in Windows CMD).
 
 ```bash
-npm install     # install dependencies
-npm run dev     # start Vite dev server (http://localhost:5173)
-npm run build   # type-check + production build into dist/
-npm run preview # serve the production build
-npm test        # run the SM-2 test suite (tsx)
+npm install
+npm run dev
+npm run build
+npm run preview
+npm test
 ```
+
+| Command | What it does |
+| --- | --- |
+| `npm install` | install dependencies |
+| `npm run dev` | start the Vite dev server (http://localhost:5173) |
+| `npm run build` | type-check + production build into `dist/` |
+| `npm run preview` | serve the production build locally |
+| `npm test` | run the SM-2 test suite (via tsx) |
 
 ## Project structure
 
