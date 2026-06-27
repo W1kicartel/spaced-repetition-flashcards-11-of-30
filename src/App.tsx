@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Card, Deck } from "./types";
-import { review, isDue, type Quality } from "./sm2";
+import { review, isDue, INITIAL_STATE, type Quality } from "./sm2";
 import { loadDecks, saveDecks, uid } from "./storage";
-import { INITIAL_STATE } from "./sm2";
+import { parseCards, type ParsedCard } from "./import";
 
 /**
  * useDecks — a tiny custom hook that owns the decks state and keeps it
@@ -21,6 +21,18 @@ function useDecks() {
 /** Cards in a deck that are due for review right now. */
 function dueCards(deck: Deck, now: number): Card[] {
   return deck.cards.filter((c) => c.dueDate === 0 || isDue(c.dueDate, now));
+}
+
+/** Build a fresh, never-reviewed Card from a front/back pair. */
+function makeCard(front: string, back: string): Card {
+  return {
+    id: uid(),
+    front,
+    back,
+    schedule: { ...INITIAL_STATE },
+    dueDate: 0,
+    createdAt: Date.now(),
+  };
 }
 
 type View =
@@ -69,18 +81,20 @@ export function App() {
             setDecks((ds) =>
               ds.map((d) =>
                 d.id === activeDeck.id
+                  ? { ...d, cards: [...d.cards, makeCard(front, back)] }
+                  : d
+              )
+            )
+          }
+          onImportCards={(parsed) =>
+            setDecks((ds) =>
+              ds.map((d) =>
+                d.id === activeDeck.id
                   ? {
                       ...d,
                       cards: [
                         ...d.cards,
-                        {
-                          id: uid(),
-                          front,
-                          back,
-                          schedule: { ...INITIAL_STATE },
-                          dueDate: 0,
-                          createdAt: Date.now(),
-                        },
+                        ...parsed.map((p) => makeCard(p.front, p.back)),
                       ],
                     }
                   : d
@@ -203,10 +217,12 @@ function DeckDetail(props: {
   onBack: () => void;
   onStudy: () => void;
   onAddCard: (front: string, back: string) => void;
+  onImportCards: (cards: ParsedCard[]) => void;
   onDeleteCard: (id: string) => void;
 }) {
   const [front, setFront] = useState("");
   const [back, setBack] = useState("");
+  const [showImport, setShowImport] = useState(false);
   const due = useMemo(() => dueCards(props.deck, Date.now()).length, [props.deck]);
 
   const submit = (e: React.FormEvent) => {
@@ -223,11 +239,7 @@ function DeckDetail(props: {
         <button className="link" onClick={props.onBack}>
           ← All decks
         </button>
-        <button
-          className="primary"
-          disabled={due === 0}
-          onClick={props.onStudy}
-        >
+        <button className="primary" disabled={due === 0} onClick={props.onStudy}>
           {due > 0 ? `Study ${due} due` : "Nothing due"}
         </button>
       </div>
@@ -249,6 +261,25 @@ function DeckDetail(props: {
         />
         <button type="submit">Add card</button>
       </form>
+
+      <div className="import-bar">
+        <button
+          className="ghost"
+          onClick={() => setShowImport((s) => !s)}
+          aria-expanded={showImport}
+        >
+          {showImport ? "Close import" : "⬆ Import cards from file or text"}
+        </button>
+      </div>
+
+      {showImport && (
+        <ImportPanel
+          onImport={(cards) => {
+            props.onImportCards(cards);
+            setShowImport(false);
+          }}
+        />
+      )}
 
       <ul className="card-list">
         {props.deck.cards.map((c) => (
@@ -272,6 +303,87 @@ function DeckDetail(props: {
         ))}
       </ul>
     </main>
+  );
+}
+
+/* ----------------------------- Import panel ---------------------------- */
+
+const IMPORT_PLACEHOLDER = `Paste one card per line. Front and back separated by a tab, comma, ; | or ::
+
+capital of France, Paris
+photosynthesis :: plants turning light into energy
+H2O | water`;
+
+const DELIMITER_LABEL: Record<string, string> = {
+  "\t": "Tab",
+  "::": "::",
+  "|": "Pipe |",
+  ";": "Semicolon ;",
+  ",": "Comma ,",
+};
+
+function ImportPanel(props: { onImport: (cards: ParsedCard[]) => void }) {
+  const [text, setText] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // Re-parse live so the user sees how many cards they'll get.
+  const result = useMemo(() => parseCards(text), [text]);
+
+  const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setText(String(reader.result ?? ""));
+    reader.readAsText(file);
+  };
+
+  return (
+    <section className="import-panel">
+      <div className="import-actions">
+        <button className="ghost" onClick={() => fileRef.current?.click()}>
+          Choose file (.csv, .tsv, .txt)
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".csv,.tsv,.txt,text/plain,text/csv"
+          onChange={onFile}
+          hidden
+        />
+        <span className="hint">…or paste below</span>
+      </div>
+
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder={IMPORT_PLACEHOLDER}
+        rows={8}
+        aria-label="Cards to import"
+      />
+
+      <div className="import-footer">
+        <span className="preview">
+          {result.cards.length > 0 ? (
+            <>
+              <strong>{result.cards.length}</strong> card
+              {result.cards.length === 1 ? "" : "s"} detected · separator:{" "}
+              {DELIMITER_LABEL[result.delimiter]}
+              {result.skipped > 0 && ` · ${result.skipped} line(s) skipped`}
+            </>
+          ) : (
+            "No cards detected yet"
+          )}
+        </span>
+        <button
+          className="primary"
+          disabled={result.cards.length === 0}
+          onClick={() => props.onImport(result.cards)}
+        >
+          Add {result.cards.length || ""} card
+          {result.cards.length === 1 ? "" : "s"}
+        </button>
+      </div>
+    </section>
   );
 }
 
