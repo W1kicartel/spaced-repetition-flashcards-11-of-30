@@ -28,9 +28,15 @@ typed React UI.
   a frozen study queue so grading doesn't reshuffle mid-session.
 - **Persistence** — decks and progress survive reloads via `localStorage`
   (`src/storage.ts`), with a seeded starter deck on first run.
-- **Tests** — `src/sm2.test.ts` is a dependency-free suite (24 assertions)
-  covering interval progression, the 1.3 ease-factor floor, lapses, input
-  validation, function purity and the due-date helpers.
+- **Bulk import** — build a whole deck in seconds by pasting text or uploading a
+  `.csv` / `.tsv` / `.txt` file. `src/import.ts` is a pure parser that
+  auto-detects the delimiter (tab, `::`, `|`, `;` or comma with basic CSV
+  quoting), ignores blank lines and `#` comments, and previews the card count
+  live before you commit.
+- **Tests** — two dependency-free suites: `src/sm2.test.ts` (24 assertions) for
+  the scheduler and `src/import.test.ts` (28 assertions) for the import parser —
+  delimiter detection, CSV quoting/escaping, first-delimiter splitting, skipped
+  lines and forced delimiters.
 
 ## SM-2 in one paragraph
 
@@ -65,25 +71,47 @@ npm test
 | `npm run preview` | serve the production build locally |
 | `npm test` | run the SM-2 test suite (via tsx) |
 
+> `npm test` runs the scheduler suite. Run the import suite with
+> `npx tsx src/import.test.ts`.
+
 ## Project structure
 
 ```
 src/
-  sm2.ts        # SM-2 scheduling algorithm (pure, framework-agnostic)
-  sm2.test.ts   # dependency-free test suite (24 assertions)
-  types.ts      # Card / Deck domain types
-  storage.ts    # localStorage load/save + seed deck
-  App.tsx       # React UI: deck list, deck detail, study session
-  main.tsx      # React entry point
-  styles.css    # dark-theme styling
+  sm2.ts          # SM-2 scheduling algorithm (pure, framework-agnostic)
+  sm2.test.ts     # scheduler test suite (24 assertions)
+  import.ts       # bulk-import parser (delimiter auto-detect + CSV)
+  import.test.ts  # import parser test suite (28 assertions)
+  types.ts        # Card / Deck domain types
+  storage.ts      # localStorage load/save + seed deck
+  App.tsx         # React UI: deck list, deck detail, import panel, study
+  main.tsx        # React entry point
+  styles.css      # light/premium styling (pink accent, Google grade colors)
 ```
 
 ## How to use
 
-1. Create a deck and add cards (front = question, back = answer).
+1. Create a deck and add cards one at a time (front = question, back = answer),
+   **or** click **Import** to add many at once.
 2. Hit **Study** — reveal each answer, then grade your recall from
    *Blackout* to *Easy*.
 3. SM-2 sets each card's next due date. Come back later; only due cards appear.
+
+### Importing cards quickly
+
+Open a deck, click **⬆ Import cards from file or text**, then paste lines or
+choose a `.csv` / `.tsv` / `.txt` file. One card per line; the front and back are
+separated by any of these (auto-detected):
+
+```
+capital of France, Paris
+photosynthesis :: plants turning light into energy
+H2O | water
+mitochondria	the powerhouse of the cell
+```
+
+Blank lines and lines starting with `#` are ignored. The panel shows how many
+cards were detected (and which separator) before you click **Add**.
 
 ---
 
